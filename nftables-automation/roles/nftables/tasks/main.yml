@@ -1,0 +1,10 @@
+- name: Render nftables rules
+  template:
+    src: nftables.j2
+    dest: /etc/nftables.conf
+    mode: '0644'
+
+- name: Apply nftables rules
+  command: nft -f /etc/nftables.conf
+  become: true
+

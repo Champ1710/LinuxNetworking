@@ -1,0 +1,79 @@
+#!/usr/sbin/nft -f
+
+flush ruleset
+
+table inet filter {
+  sets {
+    {% for name, cidrs in ip_sets.items() %}
+    {{ name }} = {
+      type ipv4_addr;
+      elements = { {{ cidrs | join(', ') }} }
+    }
+    {% endfor %}
+  }
+
+  chain input {
+    type filter hook input priority 0;
+    policy drop;
+
+    ct state established,related accept
+    iifname "lo" accept
+
+    # Martian filtering
+    {% for martian_set in ['martian_sources'] %}
+    ip saddr @{{ martian_set }} drop
+    {% endfor %}
+
+    # DNS
+    ip saddr @central_dns udp dport 53 accept
+    ip daddr @central_dns udp sport 53 accept
+
+    # NTP
+    ip saddr @ntp_nets udp dport 123 accept
+
+    # TCP Control Ports
+    {% for port in [80,443,8080,8081,8883] %}
+    {% for intf in ingress_intf %}
+    iifname "{{ intf }}" tcp sport {{ port }} ip daddr @intra_link_nets accept
+    {% endfor %}
+    tcp sport {{ port }} ip daddr @intra_link_nets accept
+    {% endfor %}
+
+    # SSH from internal
+    {% for intf in ingress_intf %}
+    iifname "{{ intf }}" ip saddr @intra_link_nets tcp dport 22 accept
+    {% endfor %}
+    ip saddr @intra_link_nets tcp dport 22 accept
+    ip saddr @infra_loopback ip daddr @infra_loopback tcp dport 22 accept
+    ip saddr @infra_loopback ip daddr @infra_loopback tcp sport 22 accept
+
+    # NVR scan ports
+    {% for port in [1756, 1757, 1758] %}
+    iifname "vlan900" ip saddr @security_nets udp dport {{ port }} accept
+    {% endfor %}
+  }
+
+  chain forward {
+    type filter hook forward priority 0;
+    policy drop;
+
+    # Security panel/NVR rules
+    {% for port in [442, 3389, 3001, 7700] %}
+      ip saddr @security_nets ip daddr @intra_link_nets tcp sport {{ port }} accept
+      ip saddr @intra_link_nets ip daddr @security_nets tcp dport {{ port }} accept
+      ip saddr @security_nets ip daddr @intra_link_nets udp sport {{ port }} accept
+      ip saddr @intra_link_nets ip daddr @security_nets udp dport {{ port }} accept
+    {% endfor %}
+
+    # NVR UDP scan ports
+    {% for port in [1756, 1757, 1758] %}
+    iifname "vlan900" ip daddr @security_nets udp sport {{ port }} accept
+    {% endfor %}
+  }
+
+  chain output {
+    type filter hook output priority 0;
+    policy accept;
+  }
+}
+
