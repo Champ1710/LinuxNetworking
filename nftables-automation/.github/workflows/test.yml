@@ -1,0 +1,26 @@
+name: Test nftables rendering
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-nftables:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y nftables python3-pip
+          pip3 install jinja2-cli[yaml]
+
+      - name: Render template
+        run: jinja2 roles/nftables/templates/nftables.j2 roles/nftables/vars/main.yml -o test.conf
+
+      - name: Validate nftables syntax
+        run: sudo nft -c -f test.conf
