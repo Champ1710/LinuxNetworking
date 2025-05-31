@@ -1,9 +1,4 @@
-
----
-
-## 📄 `playbook.yml`
-
-```yaml
+yaml
 - name: Apply nftables rules
   hosts: localhost
   connection: local
