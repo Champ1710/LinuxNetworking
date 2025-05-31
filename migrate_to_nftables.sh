@@ -89,3 +89,11 @@ echo "[+] Verifying active nftables ruleset..."
 nft list ruleset
 
 echo "[✓] Migration complete."
+
+
+
+
+
+chmod +x migrate_to_nftables.sh
+
+sudo ./migrate_to_nftables.sh
