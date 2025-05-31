@@ -1,0 +1,10 @@
+Add this to your defaults/main.yml
+ingress_intf:
+  - swp43
+  - swp44
+
+intra_link_nets:
+  - 10.2.96.0/19
+
+security_nets:
+  - 10.1.128.0/24
