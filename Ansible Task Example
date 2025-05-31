@@ -1,0 +1,14 @@
+- name: Render nftables config
+  template:
+    src: nftables.j2
+    dest: /etc/nftables/combined.nft
+    mode: '0644'
+
+- name: Apply nftables ruleset
+  command: nft -f /etc/nftables/combined.nft
+
+- name: Enable nftables service
+  systemd:
+    name: nftables
+    enabled: true
+    state: started
