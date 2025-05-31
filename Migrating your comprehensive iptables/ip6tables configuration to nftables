@@ -1,0 +1,98 @@
+Migrating your comprehensive iptables/ip6tables configuration to nftables involves translating existing rules, defining variables, and structuring the nftables ruleset appropriately. Here's a structured approach to achieve this:([Unix & Linux Stack Exchange][1])
+Step 1: Install Necessary Tools
+Ensure that `nftables` and the translation tools are installed on your system:
+sudo apt install nftables iptables iptables-translate
+
+For Red Hat-based systems, the `iptables-restore-translate` tool is available to convert saved iptables rules to nftables syntax .([LinkedIn][2])
+
+Step 2: Save Existing iptables Rules
+Backup your current iptables and ip6tables rules:
+sudo iptables-save > /root/iptables.dump
+sudo ip6tables-save > /root/ip6tables.dump
+Translate iptables Rules to nftables
+Use the translation tools to convert your saved rules:
+sudo iptables-restore-translate -f /root/iptables.dump > /etc/nftables/iptables.nft
+sudo ip6tables-restore-translate -f /root/ip6tables.dump > /etc/nftables/ip6tables.nft
+
+
+These tools convert iptables rules to nftables syntax, facilitating the migration process .
+Step 4: Define Variables in nftables
+nftables allows the use of variables and sets to simplify rule definitions. For example:
+define INGRESS_INTF = { "swp43", "swp44" }
+define INTRA_LINK_NETS = { 10.2.96.0/19 }
+define SECURITY_NETS = { 10.1.128.0/24 }
+
+These definitions can be placed at the beginning of your nftables configuration file.
+ 
+Step 5: Structure nftables Ruleset
+Create a structured nftables ruleset incorporating your variables and translated rules. Here's an example:([Unix & Linux Stack Exchange][1])
+nft
+table inet filter {
+    sets {
+        ingress_intf = { type ifname; elements = $INGRESS_INTF }
+        intra_link_nets = { type ipv4_addr; elements = $INTRA_LINK_NETS }
+        security_nets = { type ipv4_addr; elements = $SECURITY_NETS }
+    }
+
+    chain input {
+        type filter hook input priority 0;
+        policy drop;
+
+        # Allow HTTP/HTTPS from ingress interfaces to intra-link networks
+        iifname @ingress_intf ip daddr @intra_link_nets tcp sport { 80, 443, 8080, 8081, 8883 } accept
+
+        # Allow SSH from intra-link networks
+        ip saddr @intra_link_nets tcp dport 22 accept
+
+        # Allow UDP ports 1756-1758 from security networks on vlan900
+        iifname "vlan900" ip saddr @security_nets udp dport { 1756, 1757, 1758 } accept
+    }
+
+    chain forward {
+        type filter hook forward priority 0;
+        policy drop;
+
+        # Allow TCP port 442 between security and intra-link networks
+        ip saddr @security_nets ip daddr @intra_link_nets tcp sport 442 accept
+        ip saddr @intra_link_nets ip daddr @security_nets tcp dport 442 accept
+
+        # Allow TCP/UDP port 3389 between security and intra-link networks
+        ip saddr @intra_link_nets ip daddr @security_nets tcp dport 3389 accept
+        ip saddr @security_nets ip daddr @intra_link_nets tcp sport 3389 accept
+        ip saddr @intra_link_nets ip daddr @security_nets udp dport 3389 accept
+        ip saddr @security_nets ip daddr @intra_link_nets udp sport 3389 accept
+
+        # Allow TCP port 3001 between security and intra-link networks
+        ip saddr @intra_link_nets ip daddr @security_nets tcp dport 3001 accept
+        ip saddr @security_nets ip daddr @intra_link_nets tcp sport 3001 accept
+
+        # Allow TCP port 7700 between security and intra-link networks
+        ip saddr @intra_link_nets ip daddr @security_nets tcp dport 7700 accept
+        ip saddr @security_nets ip daddr @intra_link_nets tcp sport 7700 accept
+
+        # Allow UDP ports 1756-1758 from vlan900 to security networks
+        iifname "vlan900" ip daddr @security_nets udp sport { 1756, 1757, 1758 } accept
+    }
+
+    chain output {
+        type filter hook output priority 0;
+        policy accept;
+    }
+}
+
+This structure mirrors your original iptables rules, utilizing nftables' capabilities for sets and variables to simplify and organize the ruleset.
+
+Step 6: Apply and Enable nftables Ruleset
+Apply the new ruleset:
+sudo nft -f /etc/nftables/iptables.nft
+sudo nft -f /etc/nftables/ip6tables.nft
+Enable and start the nftables service:
+sudo systemctl enable --now nftables
+
+Step 7: Verify nftables Rules
+List the active nftables ruleset to verify:
+sudo nft list ruleset
+
+Step 8: Test and Validate
+
+Ensure that all intended traffic is permitted and undesired traffic is blocked as per your security policies.
